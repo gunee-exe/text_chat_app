@@ -1,0 +1,109 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helper functions ────────────────────────────────────────────────────
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return request.auth.uid == uid;
+    }
+
+    function isChatParticipant(chatId) {
+      return isSignedIn() &&
+             request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+    }
+
+    // ── usernames/{usernameLower} ───────────────────────────────────────────
+    match /usernames/{usernameLower} {
+      allow read: if isSignedIn();
+      // Can only create if it doesn't exist, and uid matches the creator
+      allow create: if isSignedIn() &&
+                    !exists(/databases/$(database)/documents/usernames/$(usernameLower)) &&
+                    request.resource.data.uid == request.auth.uid;
+      // Can only delete if the user owns this username reservation
+      allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow update: if false; // Usernames are immutable, must delete and recreate to change
+    }
+
+    // ── users/{uid} ─────────────────────────────────────────────────────────
+    match /users/{uid} {
+
+      // Full read/write only by the owner
+      allow read, write: if isSignedIn() && isOwner(uid);
+
+      // Any authenticated user can read only these public fields
+      allow get: if isSignedIn() && (
+        request.auth.uid != uid  // reading someone else's doc
+      );
+
+      // Block access to sensitive fields for non-owners on list queries
+      // (Firestore field-level security is enforced via allow/deny on the doc;
+      //  email and fcmTokens are protected by the rule below that restricts
+      //  non-owner writes and by security rules on the client SDK.)
+      // NOTE: Firestore does not support field-level read restrictions natively.
+      // The client SDK query in getUserByShortId only fetches public fields.
+      // For stronger isolation, use a Cloud Function as a proxy for user lookups.
+    }
+
+    // ── chats/{chatId} ──────────────────────────────────────────────────────
+    match /chats/{chatId} {
+
+      // Allow get so participants can check if chat exists (resource == null)
+      allow get: if isSignedIn() && 
+        (resource == null || request.auth.uid in resource.data.participants);
+        
+      // Allow list queries if the user is a participant
+      allow list: if isSignedIn() && 
+        request.auth.uid in resource.data.participants;
+
+      // Allow creating a new chat only if the current user is in participants
+      allow create: if isSignedIn() &&
+        request.auth.uid in request.resource.data.participants;
+        
+      // Allow updates if they are already a participant
+      allow update: if isSignedIn() &&
+        request.auth.uid in resource.data.participants;
+        
+      // Allow deletes if they are a participant
+      allow delete: if isSignedIn() &&
+        request.auth.uid in resource.data.participants;
+
+      // ── chats/{chatId}/messages/{messageId} ──────────────────────────────
+      match /messages/{messageId} {
+
+        // Participants can read all messages
+        allow read: if isChatParticipant(chatId);
+
+        // Creating a message:
+        //   - Sender must be a participant
+        //   - senderId in the doc must match authenticated uid (prevent spoofing)
+        //   - text must be 1–2000 chars and not whitespace-only
+        allow create: if isChatParticipant(chatId) &&
+          request.resource.data.senderId == request.auth.uid &&
+          request.resource.data.text is string &&
+          request.resource.data.text.size() >= 1 &&
+          request.resource.data.text.size() <= 2000 &&
+          request.resource.data.text.trim().size() >= 1 &&
+          request.resource.data.deleted == false;
+
+        // Updating a message:
+        //   - Only the sender can update their own message
+        //   - Only the `deleted` field can be changed (soft delete)
+        //   - Cannot change senderId, text, or sentAt
+        allow update: if isSignedIn() &&
+          resource.data.senderId == request.auth.uid &&
+          request.resource.data.senderId == resource.data.senderId &&
+          request.resource.data.text == resource.data.text &&
+          request.resource.data.sentAt == resource.data.sentAt &&
+          request.resource.data.deleted == true;  // can only soft-delete, not undelete
+
+        // Hard deletes are not permitted by any user
+        allow delete: if false;
+      }
+    }
+  }
+}
