@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(flutter analyze *)",
+      "Bash(flutter test *)",
+      "Bash(P=\"C:/Users/Usman Ghani/AppData/Local/Pub/Cache/hosted/pub.dev/flutter_local_notifications-20.1.0/lib/src/flutter_local_notifications_plugin.dart\"; grep -n \"  Future<bool?> initialize\\(\\\\|  Future<void> show\\(\\\\|required InitializationSettings\\\\|required int id\\\\|NotificationDetails\\\\|onDidReceiveNotificationResponse\" \"$P\" | head -30)",
+      "Read(//c/Users/Usman Ghani/AppData/Local/Pub/Cache/hosted/pub.dev/flutter_local_notifications-20.1.0/lib/src/**)",
+      "Bash(P=\"C:/Users/Usman Ghani/AppData/Local/Pub/Cache/hosted/pub.dev/flutter_local_notifications-20.1.0/lib/src/flutter_local_notifications_plugin.dart\"; sed -n '249,258p' \"$P\")",
+      "Bash(dart run *)",
+      "Bash(git ls-remote *)",
+      "Bash(git config *)",
+      "Bash(echo \"name: $\\(git config --global user.name\\)\")",
+      "Bash(echo \"email: $\\(git config --global user.email\\)\")",
+      "Bash(git init *)",
+      "Bash(git remote *)",
+      "Bash(git fetch *)",
+      "Bash(git reset *)",
+      "Bash(git add *)"
+    ]
+  }
+}
